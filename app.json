@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "k-high",
-    "slug": "k-high",
+    "name": "senior-map",
+    "slug": "senior-map",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "khigh",
+    "scheme": "seniormap",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
