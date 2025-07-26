@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>카카오 지도</title>
+    <style>
+      html, body, #map {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+      }
+    </style>
+    <script
+      type="text/javascript"
+      src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=a04dd5a3c15a754fc6c468ab37425a34&libraries=services"
+    ></script>
+  </head>
+  <body>
+    <div id="map"></div>
+    <script>
+      const container = document.getElementById('map');
+      const options = {
+        center: new kakao.maps.LatLng(37.5665, 126.9780),
+        level: 3,
+      };
+      const map = new kakao.maps.Map(container, options);
+    </script>
+  </body>
+</html>
