@@ -97,13 +97,9 @@ alwaysApply: false
 
 ### 목적
 - **의도**: 팀 내 일관된 개발 방식 확립. 파일 배치, 라우팅, 코드 스타일, 테스트, 협업 규칙을 간결하게 정의.
-- **적용 범위**: `app/` 기반 Expo Router RN 앱, Supabase 연동, 테마 컴포넌트 기반 UI.
 
 ### 아키텍처 요약
 - **플랫폼**: Expo + React Native + TypeScript
-- **라우팅**: Expo Router 파일 기반(`app/`), 탭 그룹 `(tabs)` 사용
-- **상태/데이터**: `context/AuthContext.tsx`, `supabaseClient.ts`
-- **UI 공통**: `components/`와 `components/ui/`의 테마 컴포넌트들 사용
 
 ### 디렉토리 규칙
 - **`app/`**: 화면/레이아웃 전용 디렉토리
@@ -113,9 +109,6 @@ alwaysApply: false
   - 미정의 라우트: `app/+not-found.tsx`
   - 레거시/임시 스크린은 `app/screens/`에만 배치하고, 새 코드는 Router 규칙을 따름
 - **`components/`**: 재사용 가능한 프리미티브/복합 컴포넌트
-  - 플랫폼 분기 파일은 `*.ios.tsx`, `*.android.tsx`
-- **`context/`**: React Context 제공자/훅
-- **`constants/`**: 컬러/상수 토큰 정의
 - **`hooks/`**: 커스텀 훅 (UI 무관 로직은 여기)
 - **`assets/`**: 이미지/폰트/웹뷰 리소스(`map.html`)
 - **`docs/`**: 문서(PRD, 스토리보드, 룰셋 등)
@@ -123,18 +116,12 @@ alwaysApply: false
 ### 라우팅 규칙 (Expo Router)
 - **파일명 = 경로**: `app/login.tsx` → `/login`
 - **그룹**: `(tabs)`처럼 괄호 그룹은 URL에 노출되지 않음
-- **레이아웃**: 상위 `_layout.tsx`에서 네비게이션/테마 래핑
-- **탭 화면**: `app/(tabs)/index.tsx`는 첫 탭, 추가 탭은 파일로 추가
-- **404**: `+not-found.tsx` 유지
 - **가드**: 인증 필요한 화면은 레이아웃/화면에서 `AuthContext`로 보호
 
 ### 코드 스타일/패턴
 - **언어**: 새 파일은 `*.tsx` 기준. 비주요/레거시는 점진적으로 TS 전환
 - **컴포넌트**: 함수형 컴포넌트 + 명시적 Props 타입
 - **스타일**: `StyleSheet.create` 또는 테마 컴포넌트(`ThemedView`, `ThemedText`) 우선
-- **색상**: 직접 hex 사용 금지. `constants/Colors.ts`를 통해 접근
-- **네이밍**: 컴포넌트 `PascalCase`, 훅 `use*`, 파일 `kebab-case` 또는 라우트 규칙 준수
-- **임포트**: 절대경로 별칭 도입 전까지 상대경로 유지. 깊이 3 초과 시 리팩터 고려
 - **에러 처리**: 네트워크/서버 오류는 사용자 메시지 + 콘솔 로깅. 침묵 실패 금지
 
 ### 상태/데이터
