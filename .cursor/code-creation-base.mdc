@@ -1,0 +1,180 @@
+---
+description: this rule would be applied when cursor agent creates and modifies this project files
+alwaysApply: false
+---
+### 목적
+- **의도**: 팀 내 일관된 개발 방식 확립. 파일 배치, 라우팅, 코드 스타일, 테스트, 협업 규칙을 간결하게 정의.
+- **적용 범위**: `app/` 기반 Expo Router RN 앱, Supabase 연동, 테마 컴포넌트 기반 UI.
+
+### 아키텍처 요약
+- **플랫폼**: Expo + React Native + TypeScript
+- **라우팅**: Expo Router 파일 기반(`app/`), 탭 그룹 `(tabs)` 사용
+- **상태/데이터**: `context/AuthContext.tsx`, `supabaseClient.ts`
+- **UI 공통**: `components/`와 `components/ui/`의 테마 컴포넌트들 사용
+
+### 디렉토리 규칙
+- **`app/`**: 화면/레이아웃 전용 디렉토리
+  - 루트 레이아웃: `app/_layout.tsx`
+  - 탭 네비게이션: `app/(tabs)/_layout.tsx`
+  - 화면: `app/(tabs)/*.tsx`, `app/*.tsx` (예: `login.tsx`, `register.tsx`)
+  - 미정의 라우트: `app/+not-found.tsx`
+  - 레거시/임시 스크린은 `app/screens/`에만 배치하고, 새 코드는 Router 규칙을 따름
+- **`components/`**: 재사용 가능한 프리미티브/복합 컴포넌트
+  - 플랫폼 분기 파일은 `*.ios.tsx`, `*.android.tsx`
+- **`context/`**: React Context 제공자/훅
+- **`constants/`**: 컬러/상수 토큰 정의
+- **`hooks/`**: 커스텀 훅 (UI 무관 로직은 여기)
+- **`assets/`**: 이미지/폰트/웹뷰 리소스(`map.html`)
+- **`docs/`**: 문서(PRD, 스토리보드, 룰셋 등)
+
+### 라우팅 규칙 (Expo Router)
+- **파일명 = 경로**: `app/login.tsx` → `/login`
+- **그룹**: `(tabs)`처럼 괄호 그룹은 URL에 노출되지 않음
+- **레이아웃**: 상위 `_layout.tsx`에서 네비게이션/테마 래핑
+- **탭 화면**: `app/(tabs)/index.tsx`는 첫 탭, 추가 탭은 파일로 추가
+- **404**: `+not-found.tsx` 유지
+- **가드**: 인증 필요한 화면은 레이아웃/화면에서 `AuthContext`로 보호
+
+### 코드 스타일/패턴
+- **언어**: 새 파일은 `*.tsx` 기준. 비주요/레거시는 점진적으로 TS 전환
+- **컴포넌트**: 함수형 컴포넌트 + 명시적 Props 타입
+- **스타일**: `StyleSheet.create` 또는 테마 컴포넌트(`ThemedView`, `ThemedText`) 우선
+- **색상**: 직접 hex 사용 금지. `constants/Colors.ts`를 통해 접근
+- **네이밍**: 컴포넌트 `PascalCase`, 훅 `use*`, 파일 `kebab-case` 또는 라우트 규칙 준수
+- **임포트**: 절대경로 별칭 도입 전까지 상대경로 유지. 깊이 3 초과 시 리팩터 고려
+- **에러 처리**: 네트워크/서버 오류는 사용자 메시지 + 콘솔 로깅. 침묵 실패 금지
+
+### 상태/데이터
+- **Auth**: `context/AuthContext.tsx` 단일 소스. 화면에서는 훅만 사용
+- **API**: Supabase는 `supabaseClient.ts`만 직접 임포트. 헬퍼 함수로 캡슐화 권장
+- **비동기**: `async/await` 사용, 모든 호출에 try/catch + 실패 UI 처리
+
+### 파일명/네이밍 세부 규칙
+- **라우트 파일**: `app/<route>.tsx` (소문자-hyphen), 인덱스는 `index.tsx`
+- **컴포넌트**: `components/<Feature>/<Component>.tsx` 또는 루트에 공용 배치
+- **훅**: `hooks/use-*.ts` (내부 import만이면 `*.ts`, UI 관여 시 `*.tsx`)
+
+### UI/테마
+- **다크모드**: `useThemeColor`와 테마 컴포넌트 우선 사용
+- **접근성**: 터치 타겟 44px 이상, 적절한 `accessibilityLabel` 제공
+- **피드백**: 탭/중요 액션에 햅틱(`HapticTab`) 고려
+
+### 자산/정적 리소스
+- **이미지**: `assets/images/`에 배치하고 정적 임포트 권장
+- **폰트**: `assets/fonts/` 유지, 앱 로딩 시 한 번만 로드
+- **웹뷰**: `assets/map.html` 또는 루트 `map.html`은 `WebView`에서만 참조
+
+### 테스트
+- **도구**: React Native Testing Library + Jest (추가 예정 시)
+- **대상**: 훅(비즈니스 로직), 순수 컴포넌트, 유틸
+- **위치**: 소스 인접 `__tests__/` 또는 `*.test.ts(x)`
+- **원칙**: 사용자 관점 테스트 우선, DOM 세부 구현 고정 금지
+
+### 린트/포매팅
+- **ESLint**: 프로젝트 설정 준수, 경고도 차단 대상
+- **포매터**: Prettier 사용 권장(팀 전역 설정). 저장 시 자동 포맷
+
+### Git/PR
+- **브랜치**: `feature/<scope>-<short>`, `fix/<scope>-<short>`
+- **커밋**: Conventional Commits(`feat:`, `fix:`, `refactor:`, `chore:` 등)
+- **PR 크기**: 300줄 내외 지향. 설명에는 의도/설계/테스트 방법 명시
+- **리뷰**: 최소 1인 승인. 셀프 머지 금지(긴급 핫픽스 제외)
+
+### 보안/환경변수
+- **비밀정보**: 코드 커밋 금지. 환경 변수/원격 키 관리 사용
+- **통신**: HTTPS만 허용. 에러에 민감정보 포함 금지
+- **인증 흐름**: 토큰 저장은 안전한 스토리지 사용(Expo SecureStore 등 고려)
+
+### 성능/품질
+- **이미지**: 적절한 해상도 선택 및 캐싱
+- **리렌더**: `memo`, `useCallback`, `useMemo`를 과용하지 말고 병목 지점에만 적용
+- **리스트**: `FlatList`/`SectionList` 사용, `keyExtractor` 필수
+
+### 작업 방식
+- **이슈 우선**: 이슈/태스크 생성 → 브랜치 → PR → 리뷰 → 머지
+- **문서화**: 새 기능/결정은 `docs/`에 간단 요약 추가
+- **점진적 개선**: 레거시(`app/screens/*`, `app/index.js`)는 기능 변경 시 TS/Router로 동시 개선 
+
+### 목적
+- **의도**: 팀 내 일관된 개발 방식 확립. 파일 배치, 라우팅, 코드 스타일, 테스트, 협업 규칙을 간결하게 정의.
+
+### 아키텍처 요약
+- **플랫폼**: Expo + React Native + TypeScript
+
+### 디렉토리 규칙
+- **`app/`**: 화면/레이아웃 전용 디렉토리
+  - 루트 레이아웃: `app/_layout.tsx`
+  - 탭 네비게이션: `app/(tabs)/_layout.tsx`
+  - 화면: `app/(tabs)/*.tsx`, `app/*.tsx` (예: `login.tsx`, `register.tsx`)
+  - 미정의 라우트: `app/+not-found.tsx`
+  - 레거시/임시 스크린은 `app/screens/`에만 배치하고, 새 코드는 Router 규칙을 따름
+- **`components/`**: 재사용 가능한 프리미티브/복합 컴포넌트
+- **`hooks/`**: 커스텀 훅 (UI 무관 로직은 여기)
+- **`assets/`**: 이미지/폰트/웹뷰 리소스(`map.html`)
+- **`docs/`**: 문서(PRD, 스토리보드, 룰셋 등)
+
+### 라우팅 규칙 (Expo Router)
+- **파일명 = 경로**: `app/login.tsx` → `/login`
+- **그룹**: `(tabs)`처럼 괄호 그룹은 URL에 노출되지 않음
+- **가드**: 인증 필요한 화면은 레이아웃/화면에서 `AuthContext`로 보호
+
+### 코드 스타일/패턴
+- **언어**: 새 파일은 `*.tsx` 기준. 비주요/레거시는 점진적으로 TS 전환
+- **컴포넌트**: 함수형 컴포넌트 + 명시적 Props 타입
+- **스타일**: `StyleSheet.create` 또는 테마 컴포넌트(`ThemedView`, `ThemedText`) 우선
+- **에러 처리**: 네트워크/서버 오류는 사용자 메시지 + 콘솔 로깅. 침묵 실패 금지
+
+### 상태/데이터
+- **Auth**: `context/AuthContext.tsx` 단일 소스. 화면에서는 훅만 사용
+- **API**: Supabase는 `supabaseClient.ts`만 직접 임포트. 헬퍼 함수로 캡슐화 권장
+- **비동기**: `async/await` 사용, 모든 호출에 try/catch + 실패 UI 처리
+
+### 파일명/네이밍 세부 규칙
+- **라우트 파일**: `app/<route>.tsx` (소문자-hyphen), 인덱스는 `index.tsx`
+- **컴포넌트**: `components/<Feature>/<Component>.tsx` 또는 루트에 공용 배치
+- **훅**: `hooks/use-*.ts` (내부 import만이면 `*.ts`, UI 관여 시 `*.tsx`)
+
+### UI/테마
+- **다크모드**: `useThemeColor`와 테마 컴포넌트 우선 사용
+- **접근성**: 터치 타겟 44px 이상, 적절한 `accessibilityLabel` 제공
+- **피드백**: 탭/중요 액션에 햅틱(`HapticTab`) 고려
+
+### 자산/정적 리소스
+- **이미지**: `assets/images/`에 배치하고 정적 임포트 권장
+- **폰트**: `assets/fonts/` 유지, 앱 로딩 시 한 번만 로드
+- **웹뷰**: `assets/map.html` 또는 루트 `map.html`은 `WebView`에서만 참조
+
+### 테스트
+- **도구**: React Native Testing Library + Jest (추가 예정 시)
+- **대상**: 훅(비즈니스 로직), 순수 컴포넌트, 유틸
+- **위치**: 소스 인접 `__tests__/` 또는 `*.test.ts(x)`
+- **원칙**: 사용자 관점 테스트 우선, DOM 세부 구현 고정 금지
+
+### 린트/포매팅
+- **ESLint**: 프로젝트 설정 준수, 경고도 차단 대상
+- **포매터**: Prettier 사용 권장(팀 전역 설정). 저장 시 자동 포맷
+
+### Git/PR
+- **브랜치**: `feature/<scope>-<short>`, `fix/<scope>-<short>`
+- **커밋**: Conventional Commits(`feat:`, `fix:`, `refactor:`, `chore:` 등)
+- **PR 크기**: 300줄 내외 지향. 설명에는 의도/설계/테스트 방법 명시
+- **리뷰**: 최소 1인 승인. 셀프 머지 금지(긴급 핫픽스 제외)
+
+### 보안/환경변수
+- **비밀정보**: 코드 커밋 금지. 환경 변수/원격 키 관리 사용
+- **통신**: HTTPS만 허용. 에러에 민감정보 포함 금지
+- **인증 흐름**: 토큰 저장은 안전한 스토리지 사용(Expo SecureStore 등 고려)
+
+### 성능/품질
+- **이미지**: 적절한 해상도 선택 및 캐싱
+- **리렌더**: `memo`, `useCallback`, `useMemo`를 과용하지 말고 병목 지점에만 적용
+- **리스트**: `FlatList`/`SectionList` 사용, `keyExtractor` 필수
+
+### 작업 방식
+- **이슈 우선**: 이슈/태스크 생성 → 브랜치 → PR → 리뷰 → 머지
+- **문서화**: 새 기능/결정은 `docs/`에 간단 요약 추가
+- **점진적 개선**: 레거시(`app/screens/*`, `app/index.js`)는 기능 변경 시 TS/Router로 동시 개선 
+
+### 프로젝트 기반
+- **디자인 설계**: `docs/storyborad/*` 참조
+- **프로젝트 기능 및 설계**: `docs/*.md` 참조
