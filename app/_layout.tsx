@@ -3,13 +3,12 @@ import { handleRedirect } from '@/features/auth/oauth';
 import { clearSessionInServer, refreshSessionInServer } from '@/features/auth/session';
 import { supabase } from '@/services/supabaseClient';
 import * as Linking from 'expo-linking';
-import { Stack, useRouter, useSegments } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import React, { useEffect } from 'react';
 
 function RootLayoutNav() {
-  const { session, isLoading } = useSession();
-  const segments = useSegments();
+  const { session, isLoading } = useSession();  
   const router = useRouter();
 
   useEffect(() => {
@@ -52,13 +51,15 @@ export default function RootLayout() {
     })();
 
     const authSub = supabase.auth.onAuthStateChange((_evt, _session) => {
+      const router = useRouter();
       if (_session?.access_token) {
-        console.log('[Layout] authStateChange', _session.access_token);
+        console.log('[Layout] authStateChange: refresh', _session.access_token);
         refreshSessionInServer(_session.access_token);
       }
       else if (!_session?.access_token) {
-        console.log('[Layout] authStateChange', _session);
+        console.log('[Layout] authStateChange: clear', _session);
         clearSessionInServer();
+        router.replace('/(auth)/login');
       }
     });
 
