@@ -1,6 +1,6 @@
 import { SessionProvider, useSession } from '@/context/AuthContext';
 import { handleRedirect } from '@/features/auth/oauth';
-import { refreshSessionInServer } from '@/features/auth/session';
+import { clearSessionInServer, refreshSessionInServer } from '@/features/auth/session';
 import { supabase } from '@/services/supabaseClient';
 import * as Linking from 'expo-linking';
 import { Stack, useRouter, useSegments } from 'expo-router';
@@ -55,6 +55,10 @@ export default function RootLayout() {
       if (_session?.access_token) {
         console.log('[Layout] authStateChange', _session.access_token);
         refreshSessionInServer(_session.access_token);
+      }
+      else if (!_session?.access_token) {
+        console.log('[Layout] authStateChange', _session);
+        clearSessionInServer();
       }
     });
 

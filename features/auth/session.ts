@@ -6,6 +6,11 @@ export async function refreshSessionInServer(access_token: string) {
   if (res.status !== 200 && res.status !== 201) throw new Error('session sync failed');
 }
 
+export async function clearSessionInServer() {
+  const res = await api.delete('/api/v1/auth/logout');
+  if (res.status !== 204) throw new Error('session sync failed');
+}
+
 export async function setAccessToken(access_token: string) {
   await SecureStore.setItemAsync('accessToken', access_token);
 }

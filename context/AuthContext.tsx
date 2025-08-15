@@ -1,6 +1,5 @@
 import { signInWithOAuth } from '@/features/auth/oauth';
 import { clearAccessToken, refreshSessionInServer } from '@/features/auth/session';
-import { api } from '@/services/apiClient';
 import { supabase } from '@/services/supabaseClient';
 import { Session, User } from '@supabase/supabase-js';
 import React, { createContext, useContext, useEffect, useState } from 'react';
@@ -101,7 +100,6 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         throw error;
       }
       await clearAccessToken();
-      await api.delete('/api/v1/auth/logout');
     } catch (error) {
       console.error('로그아웃 중 오류:', error);
       throw error;
