@@ -25,7 +25,7 @@ interface AuthContextData {
 }
 
 // 기본값으로 AuthContext 생성
-const AuthContext = createContext<AuthContextData>({} as AuthContextData);
+const AuthContext = createContext<AuthContextData|undefined>(undefined);
 
 /**
  * AuthContext를 사용하기 위한 커스텀 훅
@@ -34,10 +34,8 @@ const AuthContext = createContext<AuthContextData>({} as AuthContextData);
  */
 export function useSession() {
   const value = useContext(AuthContext);
-  if (process.env.NODE_ENV !== 'production') {
-    if (!value) {
-      throw new Error('useSession must be wrapped in a <SessionProvider />');
-    }
+  if (!value) {
+    throw new Error('useSession must be wrapped in a <SessionProvider />');
   }
   return value;
 }
@@ -102,8 +100,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         console.error('로그아웃 오류:', error);
         throw error;
       }
-      await api.delete('/api/v1/auth/logout');
       await clearAccessToken();
+      await api.delete('/api/v1/auth/logout');
     } catch (error) {
       console.error('로그아웃 중 오류:', error);
       throw error;
