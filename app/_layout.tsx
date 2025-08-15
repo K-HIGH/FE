@@ -1,12 +1,11 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { useFonts } from 'expo-font';
+import { useSession } from '@/context/AuthContext';
+import { handleRedirect } from '@/features/auth/oauth';
+import { refreshSessionInServer } from '@/features/auth/session';
+import { supabase } from '@/services/supabaseClient';
+import * as Linking from 'expo-linking';
 import { Stack, useRouter, useSegments } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
+import * as WebBrowser from 'expo-web-browser';
 import React, { useEffect } from 'react';
-import 'react-native-reanimated';
-
-import { useColorScheme } from '@/hooks/useColorScheme';
-import { SessionProvider, useSession } from '../context/AuthContext';
 
 function RootLayoutNav() {
   const { session, isLoading } = useSession();
@@ -19,36 +18,50 @@ function RootLayoutNav() {
     if (session) {
       router.replace('/(tabs)');
     } else {
-      router.replace('/login');
+      router.replace('/screens/login');
     }
   }, [session, isLoading, router]);
 
   return (
     <Stack>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="login" options={{ headerShown: false }} />
-      <Stack.Screen name="register" options={{ title: '가입하기' }} />
+      <Stack.Screen name="screens/login" options={{ headerShown: false }} />
+      <Stack.Screen name="screens/register" options={{ title: '가입하기' }} />
       <Stack.Screen name="+not-found" />
     </Stack>
   );
 }
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
-  const [loaded] = useFonts({
-    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
-  });
+  useEffect(() => {
+    WebBrowser.maybeCompleteAuthSession();
 
-  if (!loaded) {
-    return null;
-  }
+    const sub = Linking.addEventListener('url', async ({ url }) => {
+      try { await handleRedirect(url); } catch (e) {
+        console.log('[OAuth] handleRedirect error', e);
+      }
+    });
 
-  return (
-    <SessionProvider>
-      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <RootLayoutNav />
-        <StatusBar style="auto" />
-      </ThemeProvider>
-    </SessionProvider>
-  );
+    (async () => {
+      const initialUrl = await Linking.getInitialURL();
+      if (initialUrl) {
+        try { await handleRedirect(initialUrl); } catch (e) {
+          console.log('[OAuth] handleRedirect error', e);
+        }
+      }
+    })();
+
+    const authSub = supabase.auth.onAuthStateChange((_evt, _session) => {
+      if (_session?.access_token) {
+        refreshSessionInServer(_session.access_token);
+      }
+    });
+
+    return () => {
+      sub.remove();
+      authSub.data.subscription.unsubscribe();
+    };
+  }, []);
+
+  return <Stack screenOptions={{ headerShown: false }} />;
 }
