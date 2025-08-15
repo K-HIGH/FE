@@ -36,10 +36,10 @@ export default function Index() {
         // console.log('[Index] Index', session);
         if (session) {
         //   console.log('[Index] HomeScreen');
-          router.replace('/screens/HomeScreen');   // 이미 있는 홈 화면
+          router.replace('/(tabs)');   // 이미 있는 홈 화면
         } else {
         //   console.log('[Index] Login');
-          router.replace('/screens/login');        // 이미 있는 로그인 화면
+          router.replace('/(auth)/login');        // 이미 있는 로그인 화면
         }
       } catch (e) {
         console.log('[Index] useEffect error', e);

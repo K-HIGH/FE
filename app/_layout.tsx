@@ -1,4 +1,4 @@
-import { useSession } from '@/context/AuthContext';
+import { SessionProvider, useSession } from '@/context/AuthContext';
 import { handleRedirect } from '@/features/auth/oauth';
 import { refreshSessionInServer } from '@/features/auth/session';
 import { supabase } from '@/services/supabaseClient';
@@ -53,6 +53,7 @@ export default function RootLayout() {
 
     const authSub = supabase.auth.onAuthStateChange((_evt, _session) => {
       if (_session?.access_token) {
+        console.log('[Layout] authStateChange', _session.access_token);
         refreshSessionInServer(_session.access_token);
       }
     });
@@ -63,5 +64,9 @@ export default function RootLayout() {
     };
   }, []);
 
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return (
+    <SessionProvider>
+      <Stack screenOptions={{ headerShown: false }} />
+    </SessionProvider>
+  );
 }
