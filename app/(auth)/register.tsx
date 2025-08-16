@@ -21,7 +21,7 @@ export default function RegisterScreen() {
   // 세션이 없으면 로그인 화면으로 리다이렉트
   useEffect(() => {
     if (!session || !user) {
-      router.replace('/screens/login');
+      router.replace('/(auth)/login');
       return;
     }
 
