@@ -32,6 +32,7 @@ function RootLayoutNav() {
 }
 
 export default function RootLayout() {
+  const router = useRouter();
   useEffect(() => {
     WebBrowser.maybeCompleteAuthSession();
 
@@ -51,7 +52,6 @@ export default function RootLayout() {
     })();
 
     const authSub = supabase.auth.onAuthStateChange((_evt, _session) => {
-      const router = useRouter();
       if (_session?.access_token) {
         console.log('[Layout] authStateChange: refresh', _session.access_token);
         refreshSessionInServer(_session.access_token);
