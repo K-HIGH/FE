@@ -1,10 +1,10 @@
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
+import { useSession } from '@/context/AuthContext';
+import { supabase } from '@/services/supabaseClient';
 import { useRouter } from 'expo-router';
 import React, { useEffect } from 'react';
 import { Button, StyleSheet, View } from 'react-native';
-import { useSession } from '../../context/AuthContext';
-import { supabase } from '../../services/supabaseClient';
 /**
  * 로그인 화면 컴포넌트
  * Supabase OAuth를 통한 소셜 로그인 제공
@@ -24,7 +24,7 @@ export default function LoginScreen() {
         router.replace('/(tabs)');
       } else {
         // 프로필이 없는 경우 회원가입 화면으로 이동
-        router.replace('/screens/register');
+        router.replace('/(auth)/register');
       }
     }
   }, [session, user, router]);
