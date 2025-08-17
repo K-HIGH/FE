@@ -175,11 +175,13 @@ export class LocationSender {
   ): boolean {
     if (!lastLocation) return true;
 
-    // 거리 계산 (단순한 유클리드 거리)
-    const deltaLat = newLocation.coords.latitude - lastLocation.coords.latitude;
-    const deltaLon = newLocation.coords.longitude - lastLocation.coords.longitude;
-    const distance = Math.sqrt(deltaLat * deltaLat + deltaLon * deltaLon) * 111000; // 대략적인 미터 변환
-
+    // 하버사인 공식으로 거리 계산
+    const distance = this.haversineDistance(
+      newLocation.coords.latitude,
+      newLocation.coords.longitude,
+      lastLocation.coords.latitude,
+      lastLocation.coords.longitude
+    );
     return distance >= this.options.distanceFilter;
   }
 
@@ -289,6 +291,29 @@ export class LocationSender {
    */
   getLastKnownLocation(): Location.LocationObject | null {
     return this.lastKnownLocation;
+  }
+
+  /**
+ * 두 지점 간의 거리(미터)를 하버사인 공식으로 계산
+ */
+  private haversineDistance(
+    lat1: number,
+    lon1: number,
+    lat2: number,
+    lon2: number
+  ): number {
+    const toRad = (value: number) => (value * Math.PI) / 180;
+    const R = 6371000; // 지구 반지름 (미터)
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(toRad(lat1)) *
+        Math.cos(toRad(lat2)) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
   }
 }
 
