@@ -344,6 +344,7 @@ export class LocationReceiver {
     this.options = { ...this.options, ...newOptions };
     
     // 추적 중이라면 재시작
+    // TODO: 추적 재시작 로직 재구성 필요
     if (this.isTracking && this.trackingInterval) {
       const wasTracking = this.isTracking;
       this.stopTracking();
