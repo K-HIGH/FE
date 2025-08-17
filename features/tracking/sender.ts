@@ -294,6 +294,40 @@ export class LocationSender {
   }
 
   /**
+   * 현재 위치를 한 번만 송신 (일회성)
+   * 추적을 시작하지 않고 현재 위치만 서버에 전송
+   * @returns 송신 성공 여부
+   */
+  async sendOnce(): Promise<boolean> {
+    try {
+      // 위치 권한 확인
+      const hasPermission = await this.requestLocationPermission();
+      if (!hasPermission) {
+        console.warn('위치 권한이 없어 송신할 수 없습니다.');
+        return false;
+      }
+
+      // 현재 위치 가져오기
+      const location = await this.getCurrentLocation();
+      if (!location) {
+        console.warn('현재 위치를 가져올 수 없습니다.');
+        return false;
+      }
+
+      // 서버에 송신
+      const success = await this.sendLocationToServer(location);
+      if (success) {
+        console.log('일회성 위치 송신 성공');
+      }
+      
+      return success;
+    } catch (error) {
+      console.error('일회성 위치 송신 실패:', error);
+      return false;
+    }
+  }
+
+  /**
  * 두 지점 간의 거리(미터)를 하버사인 공식으로 계산
  */
   private haversineDistance(
@@ -346,18 +380,18 @@ export const stopLocationTracking = (): void => {
  * @returns 송신 성공 여부
  */
 export const sendCurrentLocation = async (): Promise<boolean> => {
-  const tempSender = new LocationSender();
+  // 새로운 LocationSender 인스턴스 생성
+  const sender = new LocationSender();
   
-  try {
-    const hasPermission = await tempSender['requestLocationPermission']();
-    if (!hasPermission) return false;
+  // public sendOnce 메서드 사용 (캡슐화 보존)
+  return await sender.sendOnce();
+};
 
-    const location = await tempSender['getCurrentLocation']();
-    if (!location) return false;
-
-    return await tempSender['sendLocationToServer'](location);
-  } catch (error) {
-    console.error('현재 위치 송신 실패:', error);
-    return false;
-  }
+/**
+ * 간편 함수: 전역 인스턴스로 현재 위치 한 번만 송신
+ * 전역 locationSender 인스턴스를 재사용하여 성능 최적화
+ * @returns 송신 성공 여부
+ */
+export const sendCurrentLocationWithGlobalInstance = async (): Promise<boolean> => {
+  return await locationSender.sendOnce();
 };
