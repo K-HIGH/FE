@@ -12,19 +12,88 @@ import {
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 
+// 분리된 모듈들 import
+import {
+  FavoriteItem,
+  favoritesManager,
+  FavoritesUtils
+} from '@/features/favorites/manager';
+import {
+  PlaceAction,
+  PlaceInfo,
+  placeInfoManager
+} from '@/features/map/places';
+import {
+  mapSearchManager,
+  SearchResult,
+  SearchStatus,
+  SearchSuggestion
+} from '@/features/map/search';
+import {
+  webviewMapService,
+  WebViewMapService,
+  WebViewMessage
+} from '@/services/webviewMapService';
+
 export default function SeniorHomeScreen() {
+  // 기본 UI 상태
   const [searchText, setSearchText] = useState('');
-  const [searchStatus, setSearchStatus] = useState('');
-  const [searchSuggestions, setSearchSuggestions] = useState<string[]>([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [selectedPlace, setSelectedPlace] = useState<any>(null);
-  const [showPlaceInfo, setShowPlaceInfo] = useState(false);
-  const [searchTimeout, setSearchTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const webViewRef = useRef<WebView>(null);
 
-  // 키보드 이벤트 리스너
+  // 모듈에서 관리되는 상태들
+  const [searchStatus, setSearchStatus] = useState<SearchStatus>('idle');
+  const [searchSuggestions, setSearchSuggestions] = useState<SearchSuggestion[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [selectedPlace, setSelectedPlace] = useState<PlaceInfo | null>(null);
+  const [showPlaceInfo, setShowPlaceInfo] = useState(false);
+  const [favorites, setFavorites] = useState<FavoriteItem[]>([]);
+
+  // 모듈 초기화 및 이벤트 리스너 설정
   useEffect(() => {
+    // WebView 서비스 초기화
+    if (webViewRef.current) {
+      webviewMapService.setWebViewRef(webViewRef);
+    }
+    webviewMapService.addMessageHandler('homeScreen', handleWebViewMessage);
+
+    // 검색 매니저 이벤트 리스너 설정
+    mapSearchManager.setEventListeners({
+      onStatusChange: (status) => {
+        setSearchStatus(status);
+      },
+      onSuggestionsReceived: (suggestions) => {
+        setSearchSuggestions(suggestions);
+        setShowSuggestions(suggestions.length > 0);
+      },
+      onSearchSuccess: (result) => {
+        const place = placeInfoManager.createPlaceFromSearchResult(result);
+        setSelectedPlace(place);
+        setShowPlaceInfo(true);
+        placeInfoManager.showPlaceInfo(place);
+      },
+      onSearchError: (error) => {
+        Alert.alert('검색 오류', error);
+      },
+    });
+
+    // 장소 정보 매니저 이벤트 리스너 설정
+    placeInfoManager.setEventListeners({
+      onPlaceInfoShow: (place) => {
+        setSelectedPlace(place);
+        setShowPlaceInfo(true);
+      },
+      onPlaceInfoHide: () => {
+        setSelectedPlace(null);
+        setShowPlaceInfo(false);
+      },
+      onActionClick: handlePlaceAction,
+    });
+
+    // 즐겨찾기 매니저 초기화
+    loadFavorites();
+
+    // 키보드 이벤트 리스너
     const keyboardDidShowListener = Keyboard.addListener(
       Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
       () => setIsKeyboardVisible(true)
@@ -35,191 +104,187 @@ export default function SeniorHomeScreen() {
     );
 
     return () => {
+      // 정리
+      webviewMapService.removeMessageHandler('homeScreen');
+      mapSearchManager.cleanup();
+      placeInfoManager.cleanup();
+      favoritesManager.cleanup();
       keyboardDidShowListener?.remove();
       keyboardDidHideListener?.remove();
     };
   }, []);
 
+  /**
+   * 즐겨찾기 목록 로드
+   */
+  const loadFavorites = async () => {
+    try {
+      const loadedFavorites = await favoritesManager.getFavorites();
+      setFavorites(loadedFavorites);
+    } catch (error) {
+      console.error('즐겨찾기 로드 실패:', error);
+    }
+  };
+
+  /**
+   * WebView 메시지 처리 (기존 이벤트를 모듈로 변환)
+   */
   const handleWebViewMessage = (event: any) => {
     try {
       const data = JSON.parse(event.nativeEvent.data);
       
-      switch (data.type) {
-        case 'MAP_LOADED':
-          console.log('카카오맵이 로드되었습니다.');
-          break;
-        case 'SEARCH_SUCCESS':
-          setSearchStatus(`✅ ${data.location} 위치를 찾았습니다.`);
-          // 연관검색어 숨기기
-          setShowSuggestions(false);
-          // 실제 장소 정보 사용
-          const placeInfo = {
-            name: data.location,
-            category: data.placeType || '장소',
-            rating: 4.0, // 기본 평점
-            address: data.roadAddress || data.address,
-            phone: '02-1234-5678', // 기본 전화번호
-            hours: '09:00 - 18:00', // 기본 운영시간
-            description: `${data.location}에 대한 상세 정보입니다.`,
-            coordinates: {
-              lat: data.lat,
-              lng: data.lng
-            }
-          };
-          setSelectedPlace(placeInfo);
-          setShowPlaceInfo(true);
-          setTimeout(() => setSearchStatus(''), 3000);
-          break;
-        case 'PLACES_SEARCH_SUCCESS':
-          // 실제 검색 결과를 연관검색어로 사용
-          console.log('연관검색어 받음:', data.places);
-          const suggestions = data.places.map((place: any) => place.place_name);
-          console.log('처리된 연관검색어:', suggestions);
-          setSearchSuggestions(suggestions);
-          setShowSuggestions(true);
-          break;
-        case 'PLACES_SEARCH_FAILED':
-          setSearchStatus(`❌ ${data.message}`);
-          setTimeout(() => setSearchStatus(''), 3000);
-          break;
-        case 'SEARCH_FAILED':
-          setSearchStatus(`❌ ${data.message}`);
-          setTimeout(() => setSearchStatus(''), 3000);
-          break;
-        case 'MAPS_NOT_LOADED':
-          setSearchStatus('⚠️ 카카오맵 API가 로드되지 않았습니다.');
-          setTimeout(() => setSearchStatus(''), 3000);
-          break;
-        case 'SEARCH_ERROR':
-          setSearchStatus(`❌ ${data.message}`);
-          setTimeout(() => setSearchStatus(''), 3000);
-          break;
-        default:
-          console.log('WebView message:', event.nativeEvent.data);
-      }
+      // 모듈의 메시지 핸들러에 전달할 WebViewMessage 객체 생성
+      const message: WebViewMessage = {
+        type: data.type,
+        location: data.location,
+        lat: data.lat,
+        lng: data.lng,
+        address: data.address,
+        roadAddress: data.roadAddress,
+        placeType: data.placeType,
+        places: data.places,
+        searchText: data.searchText,
+        message: data.message,
+      };
+      
+      handleModuleWebViewMessage(message);
     } catch (error) {
-      console.log('WebView message:', event.nativeEvent.data);
+      console.log('WebView message parsing failed:', event.nativeEvent.data);
     }
   };
 
+  /**
+   * 모듈을 통한 WebView 메시지 처리
+   */
+  const handleModuleWebViewMessage = (message: WebViewMessage) => {
+    switch (message.type) {
+      case 'MAP_LOADED':
+        console.log('카카오맵이 로드되었습니다.');
+        break;
+      case 'SEARCH_SUCCESS':
+        if (message.location && message.lat && message.lng) {
+          const searchResult: SearchResult = {
+            location: message.location,
+            lat: message.lat,
+            lng: message.lng,
+            address: message.address,
+            roadAddress: message.roadAddress,
+            placeType: message.placeType,
+          };
+          mapSearchManager.handleSearchSuccess(searchResult);
+        }
+        setShowSuggestions(false);
+        break;
+      case 'PLACES_SEARCH_SUCCESS':
+        if (message.places) {
+          const suggestions = mapSearchManager.convertPlacesToSuggestions(message.places);
+          mapSearchManager.handleSuggestionsReceived(suggestions);
+        }
+        break;
+      case 'SEARCH_FAILED':
+      case 'PLACES_SEARCH_FAILED':
+      case 'MAPS_NOT_LOADED':
+      case 'SEARCH_ERROR':
+        mapSearchManager.handleSearchError(message.message || '검색 중 오류가 발생했습니다.');
+        break;
+      default:
+        console.log('Unknown WebView message:', message);
+    }
+  };
+
+  /**
+   * 검색 입력 처리 (디바운싱 적용)
+   */
   const handleSearchInput = (text: string) => {
     setSearchText(text);
     
-    // 이전 타이머 취소
-    if (searchTimeout) {
-      clearTimeout(searchTimeout);
-    }
-    
     if (text.trim().length > 0) {
-      // 200ms 후에 검색 실행 (디바운싱 시간 단축)
-      const timeout = setTimeout(() => {
-        // 실제 카카오맵 API를 사용하여 연관검색어 가져오기
-        const searchCommand = `
-          (function() {
-            try {
-              if (window.searchPlaces) {
-                window.searchPlaces('${text}');
-              } else if (window.searchLocation) {
-                // searchPlaces가 없으면 searchLocation 사용
-                window.searchLocation('${text}');
-              } else {
-                // 검색 함수가 아직 로드되지 않은 경우
-                if (window.ReactNativeWebView) {
-                  window.ReactNativeWebView.postMessage(JSON.stringify({
-                    type: 'SEARCH_ERROR',
-                    message: '검색 기능이 로드되지 않았습니다. 잠시 후 다시 시도해주세요.'
-                  }));
-                }
-              }
-            } catch (error) {
-              console.error('Search error:', error);
-              if (window.ReactNativeWebView) {
-                window.ReactNativeWebView.postMessage(JSON.stringify({
-                  type: 'SEARCH_ERROR',
-                  message: '검색 중 오류가 발생했습니다.'
-                }));
-              }
-            }
-          })();
-        `;
-        
-        webViewRef.current?.injectJavaScript(searchCommand);
-      }, 200); // 300ms에서 200ms로 단축
-      
-      setSearchTimeout(timeout);
+      mapSearchManager.searchWithDebounce(text, (query) => {
+        webviewMapService.getSearchSuggestions(query);
+      });
     } else {
       setShowSuggestions(false);
-      setSearchSuggestions([]);
+      mapSearchManager.clearSuggestions();
     }
   };
 
-  const handleSuggestionSelect = (suggestion: string) => {
-    setSearchText(suggestion);
+  /**
+   * 연관검색어 선택 처리
+   */
+  const handleSuggestionSelect = (suggestion: SearchSuggestion) => {
+    setSearchText(suggestion.text);
     setShowSuggestions(false);
-    setSearchStatus(`🔍 ${suggestion} 검색 중...`);
     
-    // WebView에 검색 명령 전달
-    const searchCommand = `
-      (function() {
-        try {
-          if (window.searchLocation) {
-            window.searchLocation('${suggestion}');
-          } else {
-            if (window.ReactNativeWebView) {
-              window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'SEARCH_ERROR',
-                message: '검색 기능이 로드되지 않았습니다.'
-              }));
-            }
-          }
-        } catch (error) {
-          console.error('Search error:', error);
-        }
-      })();
-    `;
-    
-    webViewRef.current?.injectJavaScript(searchCommand);
+    mapSearchManager.searchImmediate(suggestion.text, (query) => {
+      webviewMapService.searchLocation(query);
+    });
   };
 
+  /**
+   * 검색 실행 (Enter 키)
+   */
   const handleSearch = () => {
     if (searchText.trim()) {
-      // Enter 키를 눌렀을 때 연관검색어 숨기기
       setShowSuggestions(false);
-      setSearchStatus(`🔍 ${searchText} 검색 중...`);
       
-      // WebView에 검색 명령 전달 (카카오맵 API 사용)
-      const searchCommand = `
-        (function() {
-          try {
-            // 카카오맵 검색 함수 호출 (주소 검색)
-            if (window.searchLocation) {
-              window.searchLocation('${searchText}');
-            } else if (window.searchPlaces) {
-              // searchLocation이 없으면 searchPlaces 사용
-              window.searchPlaces('${searchText}');
-            } else {
-              // 검색 함수가 아직 로드되지 않은 경우
-              if (window.ReactNativeWebView) {
-                window.ReactNativeWebView.postMessage(JSON.stringify({
-                  type: 'SEARCH_ERROR',
-                  message: '검색 기능이 로드되지 않았습니다. 잠시 후 다시 시도해주세요.'
-                }));
-              }
-            }
-          } catch (error) {
-            console.error('Search error:', error);
-            if (window.ReactNativeWebView) {
-              window.ReactNativeWebView.postMessage(JSON.stringify({
-                type: 'SEARCH_ERROR',
-                message: '검색 중 오류가 발생했습니다.'
-              }));
-            }
-          }
-        })();
-      `;
-      
-      webViewRef.current?.injectJavaScript(searchCommand);
+      mapSearchManager.searchImmediate(searchText, (query) => {
+        webviewMapService.searchLocation(query);
+      });
     }
+  };
+
+  /**
+   * 장소 액션 처리
+   */
+  const handlePlaceAction = async (action: PlaceAction, place: PlaceInfo) => {
+    switch (action.type) {
+      case 'navigate':
+        Alert.alert('길찾기', `${place.name}로 길찾기를 시작합니다.`);
+        break;
+      case 'call':
+        Alert.alert('전화걸기', `${place.phone}로 전화를 걸겠습니다.`);
+        break;
+      case 'bookmark':
+        // 현재 위치에서 선택된 장소로의 즐겨찾기 추가
+        try {
+          await favoritesManager.addFavorite('현재 위치', place.name);
+          await loadFavorites();
+          Alert.alert('즐겨찾기 추가', `${place.name}이(가) 즐겨찾기에 추가되었습니다.`);
+        } catch (error) {
+          Alert.alert('오류', '즐겨찾기 추가에 실패했습니다.');
+        }
+        break;
+      default:
+        console.log(`처리되지 않은 액션: ${action.type}`);
+    }
+  };
+
+  /**
+   * 즐겨찾기 항목 선택 처리
+   */
+  const handleFavoriteSelect = async (favorite: FavoriteItem) => {
+    try {
+      await favoritesManager.useFavorite(favorite.id);
+      await loadFavorites();
+      Alert.alert('이동', FavoritesUtils.formatFavoriteItem(favorite));
+    } catch (error) {
+      Alert.alert('오류', '즐겨찾기 사용에 실패했습니다.');
+    }
+  };
+
+  /**
+   * 현재 위치 이동 처리
+   */
+  const handleCurrentLocation = () => {
+    webviewMapService.moveToCurrentLocation();
+  };
+
+  /**
+   * 검색 상태 메시지 반환
+   */
+  const getSearchStatusMessage = (): string => {
+    const statusMessage = mapSearchManager.getStatusMessage();
+    return statusMessage || '';
   };
 
   return (
@@ -237,321 +302,8 @@ export default function SeniorHomeScreen() {
           onMessage={handleWebViewMessage}
           allowsInlineMediaPlayback={true}
           mediaPlaybackRequiresUserAction={false}
-          // 지도만 보이도록 CSS 주입
-          injectedJavaScript={`
-            (function() {
-              // 카카오맵 앱 UI 요소들을 더 포괄적으로 숨기기
-              const hideElements = () => {
-                // 더 많은 선택자 추가
-                const selectors = [
-                  // 카카오맵 앱 관련
-                  '.kakao-map-app-header',
-                  '.kakao-map-app-footer', 
-                  '.kakao-map-app-sidebar',
-                  '.kakao-map-app-popup',
-                  '.kakao-map-app-overlay',
-                  '.kakao-map-app-nav',
-                  '.kakao-map-app-toolbar',
-                  // 일반적인 앱 UI 요소
-                  '[data-testid*="app"]',
-                  '[class*="app-header"]',
-                  '[class*="app-footer"]',
-                  '[class*="popup"]',
-                  '[class*="overlay"]',
-                  '[class*="toolbar"]',
-                  '[class*="navigation"]',
-                  '[class*="menu"]',
-                  // 카카오맵 특정 요소들
-                  '.map_control',
-                  '.map_control_zoom',
-                  '.map_control_scale',
-                  '.map_control_fullscreen',
-                  '.map_control_compass',
-                  '.map_control_geolocation',
-                  // 추가 UI 요소들
-                  '[class*="control"]',
-                  '[class*="button"]:not([class*="map"])',
-                  '[class*="panel"]',
-                  '[class*="sidebar"]',
-                  '[class*="header"]',
-                  '[class*="footer"]'
-                ];
-                
-                selectors.forEach(selector => {
-                  try {
-                    const elements = document.querySelectorAll(selector);
-                    elements.forEach(el => {
-                      if (el) {
-                        el.style.display = 'none';
-                        el.style.visibility = 'hidden';
-                        el.style.opacity = '0';
-                      }
-                    });
-                  } catch (e) {
-                    // 선택자 오류 무시
-                  }
-                });
-                
-                // 지도 컨테이너만 보이도록 강제 설정
-                const mapSelectors = ['#map', '.map', '[class*="map"]', '[id*="map"]'];
-                mapSelectors.forEach(selector => {
-                  try {
-                    const mapContainer = document.querySelector(selector);
-                    if (mapContainer) {
-                      mapContainer.style.width = '100% !important';
-                      mapContainer.style.height = '100% !important';
-                      mapContainer.style.position = 'absolute !important';
-                      mapContainer.style.top = '0 !important';
-                      mapContainer.style.left = '0 !important';
-                      mapContainer.style.zIndex = '1 !important';
-                    }
-                  } catch (e) {
-                    // 오류 무시
-                  }
-                });
-                
-                // body와 html 스타일 강제 설정
-                document.body.style.overflow = 'hidden';
-                document.body.style.margin = '0';
-                document.body.style.padding = '0';
-                document.documentElement.style.overflow = 'hidden';
-              };
-              
-              // 즉시 실행
-              hideElements();
-              
-              // DOM 로드 후 실행
-              if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', hideElements);
-              }
-              
-              // 지연 실행 (동적 로딩 대응)
-              setTimeout(hideElements, 100);
-              setTimeout(hideElements, 500);
-              setTimeout(hideElements, 1000);
-              
-              // MutationObserver로 동적 요소 감지
-              const observer = new MutationObserver(hideElements);
-              observer.observe(document.body, { 
-                childList: true, 
-                subtree: true,
-                attributes: true,
-                attributeFilter: ['style', 'class']
-              });
-              
-              // 카카오맵 검색 함수 등록
-              window.searchLocation = function(searchText) {
-                try {
-                  console.log('searchLocation 호출됨:', searchText);
-                  
-                  // 카카오맵 API를 사용한 검색
-                  if (window.kakao && window.kakao.maps) {
-                    const geocoder = new window.kakao.maps.services.Geocoder();
-                    geocoder.addressSearch(searchText, function(result, status) {
-                      console.log('주소 검색 결과:', result, status);
-                      
-                      if (status === window.kakao.maps.services.Status.OK && result.length > 0) {
-                        const coords = new window.kakao.maps.LatLng(result[0].y, result[0].x);
-                        
-                        // 지도 중심 이동
-                        if (window.map) {
-                          window.map.setCenter(coords);
-                          window.map.setLevel(3);
-                          
-                          // 마커 추가
-                          const marker = new window.kakao.maps.Marker({
-                            position: coords
-                          });
-                          marker.setMap(window.map);
-                          
-                          // 검색 성공 알림
-                          window.ReactNativeWebView.postMessage(JSON.stringify({
-                            type: 'SEARCH_SUCCESS',
-                            location: searchText,
-                            lat: result[0].y,
-                            lng: result[0].x,
-                            address: result[0].address.address_name,
-                            roadAddress: result[0].address.road_address_name,
-                            placeType: result[0].address.region_3depth_name || result[0].address.region_2depth_name
-                          }));
-                          
-                          // 연관검색어 생성
-                          const suggestions = [
-                            searchText,
-                            searchText + ' 근처',
-                            searchText + ' 주변',
-                            searchText + ' 주변 편의시설'
-                          ];
-                          
-                          window.ReactNativeWebView.postMessage(JSON.stringify({
-                            type: 'PLACES_SEARCH_SUCCESS',
-                            places: suggestions.map(s => ({ place_name: s })),
-                            searchText: searchText
-                          }));
-                        }
-                      } else {
-                        // 주소 검색 실패 시 키워드 검색으로 대체
-                        console.log('주소 검색 실패, 키워드 검색으로 대체');
-                        if (window.searchPlaces) {
-                          window.searchPlaces(searchText);
-                        } else {
-                          // 키워드 검색도 실패 시 테스트용 연관검색어 생성
-                          const testSuggestions = [
-                            searchText,
-                            searchText + ' 근처',
-                            searchText + ' 주변',
-                            searchText + ' 주변 편의시설',
-                            searchText + ' 주변 음식점',
-                            searchText + ' 주변 카페'
-                          ];
-                          
-                          window.ReactNativeWebView.postMessage(JSON.stringify({
-                            type: 'PLACES_SEARCH_SUCCESS',
-                            places: testSuggestions.map(s => ({ place_name: s })),
-                            searchText: searchText
-                          }));
-                        }
-                      }
-                    });
-                  } else {
-                    console.error('카카오맵 API가 로드되지 않음');
-                    // API가 로드되지 않은 경우 테스트용 연관검색어 생성
-                    const testSuggestions = [
-                      searchText,
-                      searchText + ' 근처',
-                      searchText + ' 주변',
-                      searchText + ' 주변 편의시설',
-                      searchText + ' 주변 음식점',
-                      searchText + ' 주변 카페'
-                    ];
-                    
-                    window.ReactNativeWebView.postMessage(JSON.stringify({
-                      type: 'PLACES_SEARCH_SUCCESS',
-                      places: testSuggestions.map(s => ({ place_name: s })),
-                      searchText: searchText
-                    }));
-                  }
-                } catch (error) {
-                  console.error('searchLocation 오류:', error);
-                  // 오류 발생 시에도 테스트용 연관검색어 생성
-                  const testSuggestions = [
-                    searchText,
-                    searchText + ' 근처',
-                    searchText + ' 주변',
-                    searchText + ' 주변 편의시설'
-                  ];
-                  
-                  window.ReactNativeWebView.postMessage(JSON.stringify({
-                    type: 'PLACES_SEARCH_SUCCESS',
-                    places: testSuggestions.map(s => ({ place_name: s })),
-                    searchText: searchText
-                  }));
-                }
-              };
-              
-              // 장소 검색 함수 등록 (키워드 검색)
-              window.searchPlaces = function(searchText) {
-                try {
-                  console.log('searchPlaces 호출됨:', searchText);
-                  
-                  if (window.kakao && window.kakao.maps) {
-                    const places = new window.kakao.maps.services.Places();
-                    places.keywordSearch(searchText, function(result, status) {
-                      console.log('키워드 검색 결과:', result, status);
-                      
-                      if (status === window.kakao.maps.services.Status.OK && result.length > 0) {
-                        const firstResult = result[0];
-                        const coords = new window.kakao.maps.LatLng(firstResult.y, firstResult.x);
-                        
-                        // 기존 마커 제거
-                        if (window.searchMarkers) {
-                          window.searchMarkers.forEach(marker => marker.setMap(null));
-                        }
-                        window.searchMarkers = [];
-                        
-                        // 지도 중심 이동
-                        if (window.map) {
-                          window.map.setCenter(coords);
-                          window.map.setLevel(3);
-                          
-                          // 마커 추가
-                          const marker = new window.kakao.maps.Marker({
-                            position: coords
-                          });
-                          marker.setMap(window.map);
-                          window.searchMarkers.push(marker);
-                          
-                          // 검색 성공 알림
-                          window.ReactNativeWebView.postMessage(JSON.stringify({
-                            type: 'SEARCH_SUCCESS',
-                            location: firstResult.place_name,
-                            lat: firstResult.y,
-                            lng: firstResult.x,
-                            address: firstResult.address_name,
-                            roadAddress: firstResult.road_address_name,
-                            placeType: firstResult.category_group_name || '장소'
-                          }));
-                          
-                          // 연관검색어로 검색 결과 전송
-                          window.ReactNativeWebView.postMessage(JSON.stringify({
-                            type: 'PLACES_SEARCH_SUCCESS',
-                            places: result.slice(0, 10),
-                            searchText: searchText
-                          }));
-                        }
-                      } else {
-                        // 검색 실패 시에도 테스트용 연관검색어 생성
-                        const testSuggestions = [
-                          searchText,
-                          searchText + ' 근처',
-                          searchText + ' 주변',
-                          searchText + ' 주변 편의시설'
-                        ];
-                        
-                        window.ReactNativeWebView.postMessage(JSON.stringify({
-                          type: 'PLACES_SEARCH_SUCCESS',
-                          places: testSuggestions.map(s => ({ place_name: s })),
-                          searchText: searchText
-                        }));
-                      }
-                    });
-                  } else {
-                    console.error('카카오맵 API가 로드되지 않음');
-                    // API가 로드되지 않은 경우 테스트용 연관검색어 생성
-                    const testSuggestions = [
-                      searchText,
-                      searchText + ' 근처',
-                      searchText + ' 주변',
-                      searchText + ' 주변 편의시설',
-                      searchText + ' 주변 음식점',
-                      searchText + ' 주변 카페'
-                    ];
-                    
-                    window.ReactNativeWebView.postMessage(JSON.stringify({
-                      type: 'PLACES_SEARCH_SUCCESS',
-                      places: testSuggestions.map(s => ({ place_name: s })),
-                      searchText: searchText
-                    }));
-                  }
-                } catch (error) {
-                  console.error('searchPlaces 오류:', error);
-                  // 오류 발생 시에도 테스트용 연관검색어 생성
-                  const testSuggestions = [
-                    searchText,
-                    searchText + ' 근처',
-                    searchText + ' 주변',
-                    searchText + ' 주변 편의시설'
-                  ];
-                  
-                  window.ReactNativeWebView.postMessage(JSON.stringify({
-                    type: 'PLACES_SEARCH_SUCCESS',
-                    places: testSuggestions.map(s => ({ place_name: s })),
-                    searchText: searchText
-                  }));
-                }
-              };
-            })();
-          `}
+          // 카카오맵 초기화를 위한 JavaScript 주입 (모듈에서 생성)
+          injectedJavaScript={WebViewMapService.getCompleteMapInitScript()}
         />
         
         {/* 검색창을 지도 위에 오버레이로 배치 */}
@@ -589,7 +341,7 @@ export default function SeniorHomeScreen() {
                 style={styles.suggestionItem}
                 onPress={() => handleSuggestionSelect(suggestion)}
               >
-                <Text style={styles.suggestionText}>{suggestion}</Text>
+                <Text style={styles.suggestionText}>{suggestion.text}</Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
@@ -642,10 +394,7 @@ export default function SeniorHomeScreen() {
 
         <TouchableOpacity
           style={styles.currentLocationButton}
-          onPress={() => {
-            Alert.alert('현위치 이동', '현재 위치로 지도를 이동합니다.');
-            // WebView에 postMessage로 전달 가능 (후처리 필요 시)
-          }}
+          onPress={handleCurrentLocation}
         >
           <Text style={styles.buttonText}>현위치</Text>
         </TouchableOpacity>
@@ -654,9 +403,9 @@ export default function SeniorHomeScreen() {
       {/* 하단 UI */}
       <View style={styles.bottomContainer}>
         {/* 검색 상태 표시 */}
-        {searchStatus ? (
+        {getSearchStatusMessage() ? (
           <View style={styles.searchStatusContainer}>
-            <Text style={styles.searchStatusText}>{searchStatus}</Text>
+            <Text style={styles.searchStatusText}>{getSearchStatusMessage()}</Text>
           </View>
         ) : null}
 
@@ -666,15 +415,14 @@ export default function SeniorHomeScreen() {
           <Text style={styles.editButtonText}>수정</Text>
         </View>
         <ScrollView style={styles.favoritesContainer}>
-          <TouchableOpacity onPress={() => Alert.alert('이동', '우리집 → 서울대학교병원')}>
-            <Text style={styles.favoriteItem}>우리집 → 서울대학교병원</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => Alert.alert('이동', '하나로마트성수점 → 우리집')}>
-            <Text style={styles.favoriteItem}>하나로마트성수점 → 우리집</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => Alert.alert('이동', '교회 → 서울대학교병원')}>
-            <Text style={styles.favoriteItem}>교회 → 서울대학교병원</Text>
-          </TouchableOpacity>
+          {favorites.map((favorite, index) => (
+            <TouchableOpacity
+              key={index}
+              onPress={() => handleFavoriteSelect(favorite)}
+            >
+              <Text style={styles.favoriteItem}>{FavoritesUtils.formatFavoriteItem(favorite)}</Text>
+            </TouchableOpacity>
+          ))}
         </ScrollView>
 
         {/* 하단 버튼 */}
